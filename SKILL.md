@@ -90,3 +90,4 @@ If there is no recognizable manifest AND no existing `CLAUDE.md`:
 ## Closing the run
 
 End by showing the user: which CLAUDE.md files were written, the 4 agents created, any `[UNVERIFIED]` items they should confirm, and a pointer to `AGENTS_GUIDE.md` with the prompt template. Remind them to commit when satisfied.
+
