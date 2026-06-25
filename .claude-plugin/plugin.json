@@ -1,0 +1,13 @@
+{
+  "name": "claude-agent-forge",
+  "version": "0.1.0",
+  "description": "Bootstraps any repository with a verified CLAUDE.md knowledge base (root + per-directory) and a 4-agent pipeline: architecture-analyst, senior, tester, docs-updater.",
+  "author": {
+    "name": "Oscar Vasquez Roncal",
+    "url": "https://github.com/oscarvasquezroncal"
+  },
+  "homepage": "https://github.com/oscarvasquezroncal/claude-agent-forge",
+  "repository": "https://github.com/oscarvasquezroncal/claude-agent-forge",
+  "license": "MIT",
+  "keywords": ["claude-code", "skill", "agents", "claude-md", "scaffolding", "developer-tools"]
+}

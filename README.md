@@ -2,7 +2,7 @@
 
 **Standardize any repository for multi-agent development with Claude Code — in one command.**
 
-`claude-agent-forge` is a [Claude Code](https://www.anthropic.com/claude-code) skill that turns a codebase into a consistent, agent-ready project. It generates a verified `CLAUDE.md` knowledge base, a pipeline of four specialized subagents, and a guide that tells you exactly how to prompt them. Works with Python, JavaScript/TypeScript, Go, and any other structured project.
+`claude-agent-forge` is a [Claude Code](https://www.anthropic.com/claude-code) skill that turns a codebase into a consistent, agent-ready project. It generates a verified `CLAUDE.md` knowledge base by analyzing your repo's real architecture, design patterns, conventions, and dependencies — plus a pipeline of four specialized subagents and a guide that tells you exactly how to prompt them. Works with Python, JavaScript/TypeScript, Go, and any other structured project.
 
 > **Honest scope:** this standardizes context and enforces a consistent workflow. It improves reliability and reduces avoidable mistakes by giving agents verified docs, specialized roles, and explicit handoffs. It does **not** guarantee bug-free code, and it does not replace code review, tests, or version control.
 
@@ -25,9 +25,9 @@ Claude Code already reads your `CLAUDE.md` and writes code. The problem is that,
 Running the skill on a repo creates:
 
 ### 1. A `CLAUDE.md` knowledge base
-- A **compact root `CLAUDE.md`** (global truth — loaded every session, so every line earns its tokens).
+- A **compact root `CLAUDE.md`** (global truth — loaded every session, so every line earns its tokens). It's built from the repo's real architecture, design patterns, conventions, and dependencies — not boilerplate.
 - **Per-directory `CLAUDE.md`** files for non-trivial subsystems (local detail — loaded only when an agent works in that folder).
-- If the repo has **no `CLAUDE.md`**, the skill creates a good one from scratch: it infers what it can from the code, asks you a short focused set of questions for the rest, and drafts a base for your approval.
+- If the repo has **no `CLAUDE.md`**, the skill creates a good one from scratch: it infers what it can from the code, uses any context you provide, and marks anything it can't verify as `[UNVERIFIED]` for you to confirm.
 
 ### 2. A four-agent pipeline (`.claude/agents/`)
 
@@ -52,36 +52,48 @@ A guide at your repo root explaining how to drive the pipeline, including a **co
 
 ## How it works — the method
 
-The skill runs a focused, moderate-consumption pass (targeted reads and at most a couple of scoped explorers — never a full-repo crawl):
+The skill runs a focused, moderate-consumption pass (targeted reads and at most a couple of scoped explorers — never a full-repo crawl), end to end, autonomously:
 
 | Phase | What happens |
 |-------|--------------|
 | **0 — Detect** | Reads the build manifest, identifies language/framework and versions, checks whether a `CLAUDE.md` already exists. |
-| **1A — Audit** *(docs exist)* | Verifies every existing claim against real code, produces a gap-analysis checklist, then **pauses for your approval**. |
-| **1B — Create** *(no docs)* | Infers from the code, asks you a short focused set of questions for what code can't reveal, drafts a base `CLAUDE.md`, then **pauses for your approval**. |
+| **1A — Audit** *(docs exist)* | Verifies every existing claim against real code, prints a brief gap-analysis summary, then continues. |
+| **1B — Create** *(no docs)* | Infers a base from the code and any context you gave, marking unverifiable items `[UNVERIFIED]`, then continues. |
 | **2 — Write docs** | Writes the root + per-directory `CLAUDE.md`. Evidence-only; stale content removed; unconfirmed items marked `[UNVERIFIED]`. |
 | **3 — Generate agents** | Fills the four agent templates with your real stack and constraints, writes them to `.claude/agents/`. |
 | **4 — Guide** | Produces `AGENTS_GUIDE.md` with the prompt template. |
 
-**The pause is the key safety step** — nothing is written or deleted until you approve the plan.
+**The run is autonomous** — it prints a brief plan as it goes and reports any `[UNVERIFIED]` items at the end. Because nothing pauses for approval, **commit (or stash) before running** so you have a clean rollback point, and **review the git diff afterward**.
 
 ---
 
 ## Installation
 
-1. Clone or download this repo.
-2. Copy the skill folder into your Claude Code skills directory:
-   ```bash
-   # user-level (available in every project)
-   cp -r claude-agent-forge ~/.claude/skills/agent-system-init
+### Option 1 — Claude Code plugin (recommended, two commands)
 
-   # or project-level
-   cp -r claude-agent-forge <your-repo>/.claude/skills/agent-system-init
-   ```
-3. (Optional) Enable the slash command in a repo:
-   ```bash
-   cp commands/init-agents.md <your-repo>/.claude/commands/init-agents.md
-   ```
+Inside Claude Code, from any repo:
+
+```
+/plugin marketplace add https://github.com/oscarvasquezroncal/claude-agent-forge
+/plugin install claude-agent-forge@claude-agent-forge
+```
+
+Restart Claude Code, then run `/init-agents` in any project.
+
+### Option 2 — Manual install (fallback)
+
+```bash
+git clone https://github.com/oscarvasquezroncal/claude-agent-forge.git
+cd claude-agent-forge
+
+# macOS / Linux
+./install.sh
+
+# Windows PowerShell
+.\install.ps1
+```
+
+This copies the skill into `~/.claude/skills/agent-system-init` and the `/init-agents` command into `~/.claude/commands/`. Restart Claude Code afterward.
 
 > Requires Claude Code. Tested manually; treat early runs as a first pass and review the output.
 
@@ -99,7 +111,7 @@ or just ask in natural language:
 
 > "Standardize this repo with the agent system."
 
-The skill will detect your stack, audit (or create) the `CLAUDE.md`, **show you a plan and wait for approval**, then generate the docs, the four agents, and `AGENTS_GUIDE.md`.
+The skill will detect your stack, audit (or create) the `CLAUDE.md`, print a brief plan as it goes, then generate the docs, the four agents, and `AGENTS_GUIDE.md`.
 
 ### Then, to build a feature
 
@@ -121,6 +133,7 @@ Execute the TASK below using the .claude/agents/ pipeline IN ORDER:
 ## Recommended practice
 
 - **Commit before each run.** The agents edit files; you want a rollback point. (Initialization itself only writes docs + agent files.)
+- **Review the git diff afterward.** The run is autonomous, so the diff is your safety net.
 - **Start small.** Run a tiny task first to watch the handoff behave and gauge token cost.
 - **Tune cost.** The senior agent runs on the most expensive model by design — drop its `model:` field to a cheaper tier to economize. Use `/clear` between unrelated tasks and `/usage` to track spend.
 - **Trust the code over the docs.** If an agent reports a divergence between `CLAUDE.md` and reality, the code wins — let `docs-updater` fix the doc.
@@ -131,17 +144,27 @@ Execute the TASK below using the .claude/agents/ pipeline IN ORDER:
 
 ```
 claude-agent-forge/
-├── SKILL.md                          # the method: phases + rules
-├── reference/
-│   └── claude-md-spec.md             # the root (8-section) + per-dir CLAUDE.md spec
-├── templates/
-│   ├── architecture-analyst.md       # agent skeletons (filled per project)
-│   ├── senior-engineer.md
-│   ├── tester.md
-│   ├── docs-updater.md
-│   └── AGENTS_GUIDE.template.md       # the user-facing guide skeleton
-└── commands/
-    └── init-agents.md                # the /init-agents slash command
+├── .claude-plugin/
+│   ├── plugin.json                   # plugin manifest
+│   └── marketplace.json              # marketplace catalog
+├── commands/
+│   └── init-agents.md                # the /init-agents slash command
+├── skills/
+│   └── agent-system-init/
+│       ├── SKILL.md                  # the method: phases + rules
+│       ├── reference/
+│       │   └── claude-md-spec.md     # root (8-section) + per-dir CLAUDE.md spec
+│       └── templates/
+│           ├── architecture-analyst.md
+│           ├── senior-engineer.md
+│           ├── tester.md
+│           ├── docs-updater.md
+│           └── AGENTS_GUIDE.template.md
+├── install.sh                        # manual installer (macOS/Linux)
+├── install.ps1                       # manual installer (Windows)
+├── LICENSE
+├── CHANGELOG.md
+└── CONTRIBUTING.md
 ```
 
 ---
@@ -153,12 +176,13 @@ This is an early release built from a real, working pattern. It has **not yet be
 - Treat the first run on a new stack as a first pass and review the generated docs and agents.
 - The most likely rough edge is an unfilled `{{placeholder}}` in a generated agent — the skill is instructed to leave none, but check.
 
-Planned: evaluation across multiple stacks (Python / TS / messy repos), optional stack-specific specialist agents, and a packaged `.skill` release.
+Done so far: Claude Code plugin distribution (v0.1.0).
+Planned: evaluation across multiple stacks (Python / TS / messy repos), optional stack-specific specialist agents, and a companion command to refresh docs on an already-initialized repo.
 
-Contributions and issues welcome.
+Contributions and issues welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
 ## License
 
-MIT (or your preferred license — update this section).
+[MIT](LICENSE) © 2026 Oscar Vasquez Roncal
